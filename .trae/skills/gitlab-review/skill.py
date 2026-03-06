@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Any, Optional
 
 import httpx
+from fastapi import FastAPI, Request, HTTPException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +16,9 @@ GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN", "")
 DINGTALK_WEBHOOK_URL = os.getenv("DINGTALK_WEBHOOK_URL", "")
 GITLAB_API_URL = os.getenv("GITLAB_API_URL", "https://gitlab.com/api/v4")
 
+# Create FastAPI app instance
+app = FastAPI()
+
 
 def validate_gitlab_token(token: str) -> bool:
     if not GITLAB_SECRET_TOKEN:
@@ -22,7 +26,12 @@ def validate_gitlab_token(token: str) -> bool:
     return token == GITLAB_SECRET_TOKEN
 
 
-async def handle_gitlab_webhook(headers: Dict[str, str], body: Dict[str, Any]) -> Dict[str, Any]:
+@app.post("/gitlab-webhook")
+async def handle_gitlab_webhook(request: Request) -> Dict[str, Any]:
+    # Get headers and body
+    headers = dict(request.headers)
+    body = await request.json()
+
     token = headers.get("X-Gitlab-Token", "")
     if not validate_gitlab_token(token):
         return {"status": "error", "message": "Invalid token", "code": 403}
@@ -289,3 +298,10 @@ async def send_dingtalk_notification(message: str) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error sending DingTalk notification: {e}")
             return {"status": "error", "message": str(e)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    logger.info("Starting GitLab webhook server...")
+    logger.info("Webhook endpoint: http://localhost:8000/gitlab-webhook")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
